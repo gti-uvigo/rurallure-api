@@ -47,6 +47,11 @@ def get_route(start_points,end_points,profile = "foot"):
 
     response = requests.post(url, json=data)
     if response.status_code != 200 or "paths" not in response.text:
+        print("hintsss", response.json()["hints"])
+        if "PointDistanceExceededException" in response.json()["hints"]:
+            data["profile"] = "car"
+            response = requests.post(url, json=data)
+            print("hintsss", response.json()["hints"])
         print("Error: 'paths' not found in response or bad status code")
         print("Ruta fuera de españa")
         return None

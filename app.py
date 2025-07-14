@@ -108,6 +108,7 @@ def function_get_route_stages(route_id, language_id):
             if poi_data:
                 stage["points_of_interest"][idx]["title"] = poi_data.get("title")
                 stage["points_of_interest"][idx]["image_id"] = poi_data.get("image_id")
+                stage["points_of_interest"][idx]["types"] = poi_data.get("types")
 
     return jsonify({"status": "ok", "data": result}), 200
 

@@ -491,12 +491,39 @@ def function_get_pois_by_route(route_id):
 @app.route("/generate-token", methods=["POST"])
 def generate_token():
     """
-    Espera un JSON como:
-    {
-        "expires_minutes": 30,
-        "rate_limit": "5 per minute",
-        "admin_key": "your_admin_key"
-    }
+    Endpoint to generate a custom JWT token with specific claims.
+    ---
+    tags:
+      - Auth
+    parameters:
+      - in: body
+      name: body
+      required: true
+      schema:
+        type: object
+        properties:
+        expires_minutes:
+          type: integer
+          example: 15
+        rate_limit:
+          type: string
+          example: "10 per minute"
+        admin_key:
+          type: string
+          example: "your_admin_key"
+    responses: 
+      200:
+      description: Token generated successfully
+      schema:
+        type: object
+        properties:
+        access_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      403:
+      description: Invalid admin key
+      400:
+      description: Invalid request body
     """
     data = request.get_json()
     expires_minutes = data.get("expires_minutes", 15)
@@ -530,24 +557,24 @@ def function_get_all_pois():
       - POI
     parameters:
       - in: query
-        name: language_id
-        type: string
-        required: false
-        description: ID del idioma (opcional)
+      name: language_id
+      type: string
+      required: false
+      description: Optional language ID
     responses:
       200:
-        description: Lista de puntos de interés encontrados
-        schema:
+      description: List of found points of interest
+      schema:
+        type: object
+        properties:
+        status:
+          type: string
+        data:
+          type: array
+          items:
           type: object
-          properties:
-            status:
-              type: string
-            data:
-              type: array
-              items:
-                type: object
       404:
-        description: Puntos de interés no encontrados
+      description: Points of interest not found
     """
     claims = get_jwt()
     rate_limit = claims.get("rate_limit", "5 per minute")  # valor por defecto
@@ -573,27 +600,27 @@ def function_get_poi_by_id_ext(poi_id):
       - POI
     parameters:
       - in: path
-        name: poi_id
-        type: string
-        required: true
-        description: ID del punto de interés
+      name: poi_id
+      type: string
+      required: true
+      description: POI ID
       - in: query
-        name: language_id
-        type: string
-        required: false
-        description: ID del idioma (opcional)
+      name: language_id
+      type: string
+      required: false
+      description: Optional language ID
     responses:
       200:
-        description: Punto de interés encontrado
-        schema:
+      description: POI found
+      schema:
+        type: object
+        properties:
+        status:
+          type: string
+        data:
           type: object
-          properties:
-            status:
-              type: string
-            data:
-              type: object
       404:
-        description: Punto de interés no encontrado
+      description: POI not found
     """
     claims = get_jwt()
     rate_limit = claims.get("rate_limit", "10 per minute")  # valor por defecto

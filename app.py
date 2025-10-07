@@ -3,7 +3,10 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from utils import get_route
 import flasgger
-
+import time 
+import firebase_admin
+from firebase_admin import credentials, messaging
+from math import radians, cos, sin, sqrt, atan2
 
 from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required, get_jwt
@@ -28,6 +31,9 @@ limiter = Limiter(
     app=app,
     default_limits=[]
 )
+
+cred = credentials.Certificate("credentials_firebase.json")
+firebase_admin.initialize_app(cred)
 
 @app.route('/routes', methods=['POST'])
 def function_get_all_routes():
@@ -616,6 +622,223 @@ def get_all_routes_by_route_type():
     result = dto.get_all_routes_by_route_type(route_type_id, lang_id)
 
     return jsonify({"status": "ok", "data": result}), 200
+
+
+@app.route('/register_user', methods=['POST'])
+def register_user():
+    """
+    Endpoint to register a new user.
+    ---
+    tags:
+      - Users
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            fcm_token:
+              type: string
+              example: "132231234"
+            id_token:
+              type: string
+              example: "433352562"
+            email:
+              type: string
+              example: "user@example.com"
+            latitude:
+              type: number
+              example: 42.123456
+            longitude:
+              type: number
+              example: -71.123456
+              example: -71.123456
+            timestamp:
+              type: string
+              example: "2023-10-01T12:00:00Z"
+    responses:
+      200:
+        description: Usuario registrado exitosamente
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+            data:
+              type: object
+      400:
+        description: Datos de entrada inválidos
+    """
+    body = request.get_json()
+    fcm_token = body.get('fcm_token', None)
+    id_token = body.get('id_token', None)
+    email = body.get('email', None)
+    latitude = body.get('latitude', 0.0)
+    longitude = body.get('longitude', 0.0)
+    timestamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+    if not id_token or not email:
+        return jsonify({"status": "error", "message": "Missing required fields"}), 400
+
+    test_user = dto.get_user_by_id(id_token)
+    if test_user:
+        dto.update_user(fcm_token, id_token, latitude, longitude, email, timestamp)
+        return jsonify({"status": "ok", "data": test_user}), 200
+    
+    user = dto.register_user(fcm_token, id_token, latitude, longitude, email, timestamp)
+
+    return jsonify({"status": "ok", "data": user}), 200
+
+
+@app.route('/update_user', methods=['POST'])
+def update_user():
+    """
+    Endpoint to update an existing user.
+    ---
+    tags:
+      - Users
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            id_token:
+              type: string
+              example: "433352562"
+            latitude:
+              type: number
+              example: 42.123456
+            longitude:
+              type: number
+              example: -71.123456
+            timestamp:
+              type: string
+              example: "2023-10-01T12:00:00Z"
+    responses:
+      200:
+        description: Usuario actualizado exitosamente
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+            data:
+              type: object
+      400:
+        description: Datos de entrada inválidos
+    """
+    body = request.get_json()
+    id_token = body.get('id_token', None)
+    latitude = body.get('latitude', 0.0)
+    longitude = body.get('longitude', 0.0)
+    timestamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+    if not id_token:
+        return jsonify({"status": "error", "message": "Missing required fields"}), 400
+
+    user = dto.update_user(None, id_token, latitude, longitude, None, timestamp)
+
+    return jsonify({"status": "ok", "data": user}), 200
+
+
+@app.route('/send_notification_sos', methods=['POST'])
+def send_notification_sos():
+    """
+    Endpoint to send a notification to a user.
+    ---
+    tags:
+      - Notifications
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            id_token:
+              type: string
+              example: "433352562"
+    responses:
+      200:
+        description: Notificación enviada exitosamente
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+            data:
+              type: object
+      400:
+        description: Datos de entrada inválidos
+    """
+    body = request.get_json()
+    id_token = body.get('id_token', None)
+    if not id_token:
+        return jsonify({"status": "error", "message": "Missing required fields"}), 400
+    
+    user = dto.get_user_by_id(id_token)
+    if not user:
+        return jsonify({"status": "error", "message": "User not found"}), 404
+    
+    if not user.get("fcm_token", None):
+        return jsonify({"status": "error", "message": "User has no FCM token"}), 404
+    titulo = "SOS Rurallure"
+    cuerpo = "Alguien necesita ayuda. Coordenadas: {}, {}".format(user["latitude"], user["longitude"])
+    
+
+    ##Obtengo todo los usuarios de la base de datos, y veo aquellos que se actualizaran hace menos de 30 minutos y estan a menos de 1km
+    all_users = dto.get_all_users()
+    fcm_tokens_send = []
+    for u in all_users:
+        if u["id_token"] != id_token:
+            tiempo_actual = time.gmtime()
+            tiempo_usuario = time.strptime(u["last_updated"], '%Y-%m-%dT%H:%M:%SZ')
+            print(tiempo_actual)
+            print(tiempo_usuario)
+            diferencia_minutos = (time.mktime(tiempo_actual) - time.mktime(tiempo_usuario)) / 60.0
+            print("--------------------------------------", diferencia_minutos)
+            if diferencia_minutos <= 30.0:
+                # Calculo la distancia entre el usuario que envia el SOS y el usuario actual
+                R = 6371.0  # Radio de la Tierra en kilómetros
+
+                lat1 = radians(user["latitude"])
+                lon1 = radians(user["longitude"])
+                lat2 = radians(u["latitude"])
+                lon2 = radians(u["longitude"])
+
+                dlon = lon2 - lon1
+                dlat = lat2 - lat1
+
+                a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+                c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+                distance = R * c  # Distancia en kilómetros
+
+                print(f"Distance to user {u['id_token']}: {distance} km")
+                if distance <= 5.0:  # Si la distancia es menor o igual a 5 km
+                    if u.get("fcm_token", None):
+                        fcm_tokens_send.append(u["fcm_token"])
+
+    def enviar_mensaje(token, titulo, cuerpo):
+        mensaje = messaging.Message(
+            notification=messaging.Notification(
+                title=titulo,
+                body=cuerpo,
+            ),
+            token=token,
+        )
+        respuesta = messaging.send(mensaje)
+        print("Mensaje enviado:", respuesta)
+
+    if fcm_tokens_send == []:
+        return jsonify({"status": "error", "message": "No nearby users to notify, call 911"}), 404
+    for token in fcm_tokens_send:
+        enviar_mensaje(token, titulo, cuerpo)
+
+    return jsonify({"status": "ok", "sos send from user": id_token}), 200
 
 swagger = flasgger.Swagger(app, template=swagger_config)
 

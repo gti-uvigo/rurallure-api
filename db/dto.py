@@ -1,4 +1,4 @@
-from db.dao import get_method, post_method, get_image_gridfs
+from db.dao import get_method, post_method, get_image_gridfs, update_method
 
 
 def get_text_by_lang(text_list, lang_id):
@@ -163,3 +163,92 @@ def get_all_routes_by_route_type(route_type: str, language_id: str = "6d68e409-c
                 del route[key]
     return routes
 
+
+def register_user(fcm_token: str, id_token: str, latitude: float, longitude: float, email: str, timestamp: str):
+    """
+    Registra un nuevo usuario en la base de datos.
+    
+    :param fcm_token: Token de Firebase Cloud Messaging del usuario.
+    :param id_token: Token de identificación del usuario.
+    :param latitude: Latitud de la ubicación del usuario.
+    :param longitude: Longitud de la ubicación del usuario.
+    :param email: Correo electrónico del usuario.
+    :param last_updated: Fecha y hora de la última actualización del usuario.
+    :return: Datos del usuario registrado.
+    """
+    user_data = {
+        "fcm_token": fcm_token,
+        "id_token": id_token,
+        "latitude": latitude,
+        "longitude": longitude,
+        "email": email,
+        "last_updated": timestamp
+    }
+    user = post_method("users", user_data)
+    if "_id" in user:
+        del user["_id"]
+    return user
+
+
+def get_user_by_id(id_token: str):
+    """
+    Obtiene un usuario por su ID de token.
+    
+    :param id_token: Token de identificación del usuario.
+    :return: Datos del usuario encontrado o None si no se encuentra.
+    """
+    filter = {"id_token": id_token}
+    user = get_method("users", filter)
+    if user and "_id" in user:
+        del user["_id"]
+    return user
+
+def get_all_users():
+    """
+    Obtiene todos los usuarios registrados en la base de datos.
+    
+    :return: Lista de usuarios.
+    """
+    users = get_method("users", {}, many=True)
+    for user in users:
+        if "_id" in user:
+            del user["_id"]
+    return users
+
+def update_user(fcm_token: str, id_token: str, latitude: float, longitude: float, email: str, timestamp: str):
+    """
+    Actualiza los datos de un usuario en la base de datos.
+    
+    :param fcm_token: Nuevo token de Firebase Cloud Messaging del usuario (opcional).
+    :param id_token: Token de identificación del usuario (obligatorio).
+    :param latitude: Nueva latitud de la ubicación del usuario (opcional).
+    :param longitude: Nueva longitud de la ubicación del usuario (opcional).
+    :param email: Nuevo correo electrónico del usuario (opcional).
+    :param last_updated: Nueva fecha y hora de la última actualización del usuario (obligatorio).
+    :return: Datos del usuario actualizado.
+    """
+    if not id_token:
+        raise ValueError("El id_token es obligatorio para actualizar un usuario.")
+    
+    update_data = {
+        "$set": {
+            "last_updated": timestamp
+        }
+    }
+    
+    if fcm_token is not None:
+        update_data["$set"]["fcm_token"] = fcm_token
+    if latitude is not None:
+        update_data["$set"]["latitude"] = latitude
+    if longitude is not None:
+        update_data["$set"]["longitude"] = longitude
+    if email is not None:
+        update_data["$set"]["email"] = email
+    
+    filter = {"id_token": id_token}
+    update_method("users", filter, update_data)
+    
+    user = get_method("users", filter)
+    if user and "_id" in user:
+        del user["_id"]
+    return user

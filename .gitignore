@@ -175,3 +175,5 @@ cython_debug/
 
 /migracion*
 docker-compose.yml
+/llm*
+credentials_firebase.json

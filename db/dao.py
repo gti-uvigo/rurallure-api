@@ -32,6 +32,18 @@ def post_method(collection_name: str, document: dict):
     result = collection.insert_one(document)
     return str(result.inserted_id)
     
+def update_method(collection_name: str, filter: dict, update: dict):
+    """
+    Actualiza un documento en la colección especificada que coincida con el filtro dado.
+
+    :param collection_name: Nombre de la colección en la base de datos.
+    :param filter: Filtro para buscar el documento a actualizar.
+    :param update: Datos de actualización.
+    :return: Resultado de la operación de actualización.
+    """
+    collection = db_connection.get_collection(collection_name)
+    result = collection.update_one(filter, update)
+    return result.modified_count
 
  
 def get_image_gridfs(image_id):

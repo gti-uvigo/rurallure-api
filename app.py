@@ -7,6 +7,8 @@ import time
 import firebase_admin
 from firebase_admin import credentials, messaging
 from math import radians, cos, sin, sqrt, atan2
+import json
+import yaml
 
 from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required, get_jwt
@@ -18,8 +20,6 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv(".env")
-
-
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -34,6 +34,23 @@ limiter = Limiter(
 
 cred = credentials.Certificate("credentials_firebase.json")
 firebase_admin.initialize_app(cred)
+
+swagger_config = {
+    "swagger": "2.0",
+    "info": {
+        "title": "Rurallure API",
+        "description": "Documentación de la API de rutas y puntos de interés de Rurallure.",
+        "version": "1.0.0"
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": " Enter yourJWT token as **Bearer <token>**"
+        }
+    }
+}
 
 @app.route('/routes', methods=['POST'])
 def function_get_all_routes():
@@ -408,15 +425,6 @@ def function_get_pois_types(language_id):
     
     return jsonify({"status": "ok", "data": result}), 200
 
-swagger_config = {
-    "swagger": "2.0",
-    "info": {
-        "title": "Rurallure API",
-        "description": "Documentación de la API de rutas y puntos de interés de Rurallure.",
-        "version": "1.0.0"
-    }
-}
-
 
 @app.route('/pois_by_route/<route_id>', methods=['GET'])
 def function_get_pois_by_route(route_id):
@@ -470,23 +478,6 @@ def function_get_pois_by_route(route_id):
     return jsonify({"status": "ok", "data": pois}), 200
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ===== RUTA PARA CREAR TOKENS PERSONALIZADOS =====
 @app.route("/generate-token", methods=["POST"])
 def generate_token():
@@ -497,33 +488,33 @@ def generate_token():
       - Auth
     parameters:
       - in: body
-      name: body
-      required: true
-      schema:
-        type: object
-        properties:
-        expires_minutes:
-          type: integer
-          example: 15
-        rate_limit:
-          type: string
-          example: "10 per minute"
-        admin_key:
-          type: string
-          example: "your_admin_key"
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            expires_minutes:
+              type: integer
+              example: 15
+            rate_limit:
+              type: string
+              example: "10 per minute"
+            admin_key:
+              type: string
+              example: "your_admin_key"
     responses: 
       200:
-      description: Token generated successfully
-      schema:
-        type: object
-        properties:
-        access_token:
-          type: string
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        description: Token generated successfully
+        schema:
+          type: object
+          properties:
+            access_token:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
       403:
-      description: Invalid admin key
+        description: Invalid admin key
       400:
-      description: Invalid request body
+        description: Invalid request body
     """
     data = request.get_json()
     expires_minutes = data.get("expires_minutes", 15)
@@ -555,26 +546,28 @@ def function_get_all_pois():
     ---
     tags:
       - POI
+    security:
+      - BearerAuth: []
     parameters:
       - in: query
-      name: language_id
-      type: string
-      required: false
-      description: Optional language ID
+        name: language_id
+        type: string
+        required: false
+        description: Optional language ID
     responses:
       200:
-      description: List of found points of interest
-      schema:
-        type: object
-        properties:
-        status:
-          type: string
-        data:
-          type: array
-          items:
+        description: List of found points of interest
+        schema:
           type: object
+          properties:
+            status:
+              type: string
+            data:
+              type: array
+              items:
+                type: object
       404:
-      description: Points of interest not found
+        description: Points of interest not found
     """
     claims = get_jwt()
     rate_limit = claims.get("rate_limit", "5 per minute")  # valor por defecto
@@ -598,29 +591,31 @@ def function_get_poi_by_id_ext(poi_id):
     ---
     tags:
       - POI
+    security:
+      - BearerAuth: []
     parameters:
       - in: path
-      name: poi_id
-      type: string
-      required: true
-      description: POI ID
+        name: poi_id
+        type: string
+        required: true
+        description: POI ID
       - in: query
-      name: language_id
-      type: string
-      required: false
-      description: Optional language ID
+        name: language_id
+        type: string
+        required: false
+        description: Optional language ID
     responses:
       200:
-      description: POI found
-      schema:
-        type: object
-        properties:
-        status:
-          type: string
-        data:
+        description: POI found
+        schema:
           type: object
+          properties:
+            status:
+              type: string
+            data:
+              type: object
       404:
-      description: POI not found
+        description: POI not found
     """
     claims = get_jwt()
     rate_limit = claims.get("rate_limit", "10 per minute")  # valor por defecto
@@ -679,7 +674,6 @@ def register_user():
               example: 42.123456
             longitude:
               type: number
-              example: -71.123456
               example: -71.123456
             timestamp:
               type: string
@@ -871,4 +865,16 @@ swagger = flasgger.Swagger(app, template=swagger_config)
 
 
 if __name__ == '__main__':
+    # generate swagger documentation
+    # with app.app_context():
+    #     swagger_spec = swagger.get_apispecs()
+    #     # Guardar en JSON
+    #     with open("swagger.json", "w", encoding="utf-8") as f:
+    #         json.dump(swagger_spec, f, indent=2, ensure_ascii=False)
+
+    #     # Guardar también en YAML (opcional)
+    #     with open("swagger.yaml", "w", encoding="utf-8") as f:
+    #         yaml.dump(swagger_spec, f, allow_unicode=True)
+
+    #     print("✅ Swagger guardado en swagger.json y swagger.yaml")
     app.run(debug=True, host='127.0.0.1', port=5000)

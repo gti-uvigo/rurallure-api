@@ -1,5 +1,6 @@
 import requests
 import json
+import base64
 
 
 def get_route(start_points,end_points,profile = "foot"):
@@ -58,3 +59,15 @@ def get_route(start_points,end_points,profile = "foot"):
     points = response.json()["paths"][0]["points"]
 
     return points["coordinates"] if "coordinates" in points else points
+
+
+
+
+
+def base64StringToJpg(base64_string):
+    """
+    Convierte una cadena Base64 a un archivo JPG.
+    
+    :param base64_string: Cadena Base64 de la imagen.
+    """
+    return base64.b64decode(base64_string)

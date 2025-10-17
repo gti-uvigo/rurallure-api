@@ -1,4 +1,5 @@
-from db.dao import get_method, post_method, get_image_gridfs, update_method
+from db.dao import get_method, post_method, get_image_gridfs, upload_image_gridfs
+import uuid
 
 
 def get_text_by_lang(text_list, lang_id):
@@ -164,91 +165,119 @@ def get_all_routes_by_route_type(route_type: str, language_id: str = "6d68e409-c
     return routes
 
 
-def register_user(fcm_token: str, id_token: str, latitude: float, longitude: float, email: str, timestamp: str):
+
+
+def create_poi(image, titles, descriptions, latitude, longitude, types, user_email, address = None, website = None, booking = None, minutes_duration = None, rating = None, planner_priority = None):
     """
-    Registra un nuevo usuario en la base de datos.
+    Crea un nuevo punto de interés (POI) en la base de datos.
     
-    :param fcm_token: Token de Firebase Cloud Messaging del usuario.
-    :param id_token: Token de identificación del usuario.
-    :param latitude: Latitud de la ubicación del usuario.
-    :param longitude: Longitud de la ubicación del usuario.
-    :param email: Correo electrónico del usuario.
-    :param last_updated: Fecha y hora de la última actualización del usuario.
-    :return: Datos del usuario registrado.
+    :param image: Imagen del POI.
+    :param titles: Lista de títulos del POI en diferentes idiomas.
+    :param descriptions: Lista de descripciones del POI en diferentes idiomas.
+    :param latitude: Latitud del POI.
+    :param longitude: Longitud del POI.
+    :param types: Tipos o categorías del POI.
+    :param address: Dirección del POI (opcional).
+    :param website: Sitio web del POI (opcional).
+    :param booking: Información de reserva del POI (opcional).
+    :param minutes_duration: Duración en minutos para visitar el POI (opcional).
+    :param rating: Calificación del POI (opcional).
+    :param planner_priority: Prioridad en el planificador para el POI (opcional).
+    :return: Resultado de la creación del POI.
     """
-    user_data = {
-        "fcm_token": fcm_token,
-        "id_token": id_token,
+    # generamos un uuid para la imagen
+    image_id = str(uuid.uuid4())
+
+    # guardamos la imagen en la base de datos
+    upload_image_gridfs(image, image_id=image_id, metadatos={"contentType": "image/jpeg"})
+    
+
+    poi_data = {
+        "titles": titles,
+        "descriptions": descriptions,
         "latitude": latitude,
         "longitude": longitude,
-        "email": email,
-        "last_updated": timestamp
+        "types": types,
+        "address": address,
+        "website": website,
+        "booking": booking,
+        "minutes_duration": minutes_duration,
+        "rating": rating,
+        "planner_priority": planner_priority,
+        "image_id": image_id,
+        "owner": user_email,
     }
-    user = post_method("users", user_data)
-    if "_id" in user:
-        del user["_id"]
-    return user
+    result = post_method("pois", poi_data)
+    return result
 
 
 def get_user_by_id(id_token: str):
     """
-    Obtiene un usuario por su ID de token.
+    Obtiene un usuario por su ID.
     
-    :param id_token: Token de identificación del usuario.
-    :return: Datos del usuario encontrado o None si no se encuentra.
+    :param user_id: ID del usuario a buscar.
+    :return: Usuario encontrado o None si no se encuentra.
     """
-    filter = {"id_token": id_token}
-    user = get_method("users", filter)
-    if user and "_id" in user:
-        del user["_id"]
+    user = get_method("users", {"id_token": id_token})
+    if user:
+        for key in ["_id"]:
+            if key in user:
+                del user[key]
     return user
 
-def get_all_users():
+def update_user(fcm_token: str, id_token: str, latitude: str, longitude: str, email: str = None, timestamp: str = None):
     """
-    Obtiene todos los usuarios registrados en la base de datos.
+    Actualiza la información de un usuario.
+    
+    :param id_token: ID del usuario a actualizar.
+    :param name: Nuevo nombre del usuario (opcional).
+    :param email: Nuevo email del usuario (opcional).
+    :return: Resultado de la actualización del usuario.
+    """
+    update_data = {}
+    if fcm_token is not None:
+        update_data["fcm_token"] = fcm_token
+    if latitude is not None:
+        update_data["latitude"] = latitude
+    if longitude is not None:
+        update_data["longitude"] = longitude
+    if email is not None:
+        update_data["email"] = email
+    if timestamp is not None:
+        update_data["last_active"] = timestamp
+    result = post_method("users", {"id_token": id_token, **update_data})
+    return result
+
+
+def get_all_users():    
+    """
+    Obtiene todos los usuarios disponibles.
     
     :return: Lista de usuarios.
     """
     users = get_method("users", {}, many=True)
     for user in users:
-        if "_id" in user:
-            del user["_id"]
+        for key in ["_id"]:
+            if key in user:
+                del user[key]
     return users
 
-def update_user(fcm_token: str, id_token: str, latitude: float, longitude: float, email: str, timestamp: str):
+
+
+def get_pois_by_user_email(user_email: str, language_id: str = "6d68e409-c46e-4d4a-8560-f15256e9cbb3"):
     """
-    Actualiza los datos de un usuario en la base de datos.
+    Obtiene todos los puntos de interés (POIs) creados por un usuario específico.
     
-    :param fcm_token: Nuevo token de Firebase Cloud Messaging del usuario (opcional).
-    :param id_token: Token de identificación del usuario (obligatorio).
-    :param latitude: Nueva latitud de la ubicación del usuario (opcional).
-    :param longitude: Nueva longitud de la ubicación del usuario (opcional).
-    :param email: Nuevo correo electrónico del usuario (opcional).
-    :param last_updated: Nueva fecha y hora de la última actualización del usuario (obligatorio).
-    :return: Datos del usuario actualizado.
+    :param user_email: Email del usuario cuyos POIs se desean obtener.
+    :return: Lista de POIs creados por el usuario.
     """
-    if not id_token:
-        raise ValueError("El id_token es obligatorio para actualizar un usuario.")
-    
-    update_data = {
-        "$set": {
-            "last_updated": timestamp
-        }
-    }
-    
-    if fcm_token is not None:
-        update_data["$set"]["fcm_token"] = fcm_token
-    if latitude is not None:
-        update_data["$set"]["latitude"] = latitude
-    if longitude is not None:
-        update_data["$set"]["longitude"] = longitude
-    if email is not None:
-        update_data["$set"]["email"] = email
-    
-    filter = {"id_token": id_token}
-    update_method("users", filter, update_data)
-    
-    user = get_method("users", filter)
-    if user and "_id" in user:
-        del user["_id"]
-    return user
+    if not user_email:
+        raise ValueError("El email del usuario no puede ser vacío.")
+    pois = get_method("pois", {"owner": user_email}, many=True)
+    for poi in pois:
+        poi["title"] = get_text_by_lang(poi.get("titles", []), language_id)
+        poi["description"] = get_text_by_lang(poi.get("descriptions", []), language_id)
+        for key in ["_id", "titles", "descriptions"]:
+            if key in poi:
+                del poi[key]
+    return pois

@@ -1,3 +1,4 @@
+import requests
 import db.dto as dto
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -7,8 +8,7 @@ import time
 import firebase_admin
 from firebase_admin import credentials, messaging
 from math import radians, cos, sin, sqrt, atan2
-import json
-import yaml
+import utils
 
 from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required, get_jwt
@@ -894,6 +894,174 @@ def send_notification_sos():
     return jsonify({"status": "ok", "sos send from user": id_token}), 200
 
 swagger = flasgger.Swagger(app, template=swagger_config)
+
+
+
+
+
+@app.route('/get_pois_by_user_email', methods=['POST'])
+def get_pois_by_user_email():
+    """
+    Endpoint to get all POIs created by a specific user email.
+    ---
+    tags:
+      - POI
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+              example: "user@example.com"
+    responses:
+      200:
+        description: POIs retrieved successfully
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  location:
+                    type: object
+                    properties:
+                      latitude:
+                        type: number
+                      longitude:
+                        type: number
+      400:
+        description: Invalid input data
+    """
+    body = request.get_json() 
+    email = body.get('user_email', None)
+    language_id = body.get('language_id', '6d68e409-c46e-4d4a-8560-f15256e9cbb3')
+    if not email:
+        return jsonify({"status": "error", "message": "Missing required fields"}), 400
+
+    pois = dto.get_pois_by_user_email(email, language_id=language_id)
+    if not pois:
+        return jsonify({"status": "error", "message": "No POIs found for this user"}), 404
+
+    return jsonify({"status": "ok", "data": pois}), 200
+
+
+
+
+@app.route('/create_poi', methods=['POST'])
+def create_poi():
+    body = request.get_json() 
+    image = body.get('image', None)
+    title = body.get('title', None)
+    description = body.get('description', None)
+    latitude = body.get('latitude', None)
+    longitude = body.get('longitude', None)
+    user_email = body.get('user_email', None)
+    types = body.get('types', [])
+
+    url = "http://193.146.210.235:5050/"
+
+    if title or description:
+        if title:
+          response = requests.post(url + "moderate_text", json={"text": title})
+          inappropriate_content = response.status_code == 403 and response.json().get("error") == "Text not allowed"
+          if inappropriate_content:
+              return jsonify({"status": "error", "message": "Inappropriate content in title or description"}), 400
+        if description:
+          response = requests.post(url + "moderate_text", json={"text": description})
+          inappropriate_content = response.status_code == 403 and response.json().get("error") == "Text not allowed"
+          if inappropriate_content:
+              return jsonify({"status": "error", "message": "Inappropriate content in title or description"}), 400
+
+    # cargamos el modelo
+    requests.get(url + "load_model")
+    print("Modelo cargado")
+    
+    if not title and not description:
+        return jsonify({"status": "error", "message": "Title or description required"}), 400
+    if latitude is None or longitude is None:
+        return jsonify({"status": "error", "message": "Latitude and longitude required"}), 400
+    
+    # Generar título si no existe
+    if not title:
+        prompt = f"Genera un título para un punto de interés con la descripción: {description}. El título debe ser breve y atractivo."
+        response = requests.post(url + "generate_text", json={"prompt": prompt}, headers={"Content-Type": "application/json"})
+        title = response.json().get("text")
+        print("Título generado:", title)
+
+    # Generar descripción si no existe
+    if not description:
+        prompt = f"Genera una descripción corta para un punto de interés con el título: {title}. La descripción debe ser breve y atractiva."
+        response = requests.post(url + "generate_text", json={"prompt": prompt})
+        description = response.json().get("text")
+        print("Descripción generada:", description)
+
+    # Generar tipos si no existen
+    if not types or len(types) == 0:
+        prompt = f"Dime un tipo posible para un punto de interés con el título: {title} y la descripción: {description}. El tipo debe ser uno de los siguientes: restaurante, museo, parque, monumento, iglesia, playa, montaña, río, lago, bosque, ciudad, pueblo.Responde solo con el tipo, sin más texto."
+        response = requests.post(url + "generate_text", json={"prompt": prompt})
+        type_text = response.json().get("text")
+        types = [t.strip() for t in type_text.split(",")]  # convertir en lista
+        print("Tipos generados:", types)
+
+
+    # Traducir títulos y descripciones
+    languages = dto.get_languages()
+    titles = []
+    descriptions_list = []
+
+    for lang in languages:
+        lang_id = lang['id']
+        lang_name = lang['name']
+
+        # Título
+        prompt = f"Traduce el siguiente texto al {lang_name}: {title}"
+        response = requests.post(url + "generate_text", json={"prompt": prompt})
+        translated_title = response.json().get("text")
+        titles.append({"language_id": lang_id, "text": translated_title})
+        print(f"Título traducido al {lang_name}:", translated_title)
+
+        # Descripción
+        prompt = f"Traduce el siguiente texto al {lang_name}: {description}"
+        response = requests.post(url + "generate_text", json={"prompt": prompt})
+        translated_description = response.json().get("text")
+        descriptions_list.append({"language_id": lang_id, "text": translated_description})
+        print(f"Descripción traducida al {lang_name}:", translated_description)
+
+    # descargamos el modelo
+    requests.get(url + "unload_model")
+    print("Modelo descargado")
+
+    # Generar imagen si no existe
+    if not image:
+        prompt = f"Genera una imagen para un punto de interés con el título: {title} y la descripción: {description}. La imagen debe ser atractiva y relevante."
+        response = requests.post(url + "generate_image", json={"prompt": prompt})
+        image_base64 = response.json().get("image_base64")
+        image = utils.base64StringToJpg(image_base64)
+        print("Imagen generada")
+
+    else:
+        image = utils.base64StringToJpg(image)
+        print("Imagen recibida")
+
+    dto.create_poi(image, titles, descriptions_list, latitude, longitude, types, user_email=user_email)
+
+    return jsonify({"title": title, "description": description}), 200
+
+
+
+
+
 
 
 if __name__ == '__main__':

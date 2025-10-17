@@ -1,3 +1,4 @@
+import os
 from db.mongo_client import db_connection
 from gridfs import GridFS
 from flask import Response
@@ -63,5 +64,24 @@ def get_image_gridfs(image_id):
         return response
     except Exception as e:
         print(f"Error al descargar el archivo: {e}")
+        return None
+    
+
+
+def upload_image_gridfs(image, image_id=None, metadatos=None):
+    """
+    Sube una imagen a GridFS.
+    :param image: Archivo de imagen a subir.
+    :param image_id: ID personalizado para la imagen (opcional).
+    :param metadatos: Diccionario de metadatos adicionales para la imagen (opcional).
+    :return: ID del archivo subido o None si hubo un error.
+    """
+    fs = GridFS(db_connection.get_db())
+
+    try:
+        file_id = fs.put(image, filename=image_id+".jpg", image_id=image_id, **(metadatos or {}))
+        return file_id
+    except Exception as e:
+        print(f"Error al subir la imagen '{image_id}' a GridFS: {e}")
         return None
     

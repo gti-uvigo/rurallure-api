@@ -1,4 +1,4 @@
-from db.dao import get_method, post_method, get_image_gridfs, upload_image_gridfs
+from db.dao import get_method, post_method, get_image_gridfs, update_method, upload_image_gridfs
 import uuid
 
 
@@ -225,6 +225,31 @@ def get_user_by_id(id_token: str):
                 del user[key]
     return user
 
+
+def register_user(fcm_token: str, id_token: str, email: str, latitude: str = None, longitude: str = None, timestamp: str = None):
+    """
+    Registra un nuevo usuario en la base de datos.
+    
+    :param id_token: ID del usuario.
+    :param email: Email del usuario.
+    :param name: Nombre del usuario (opcional).
+    :return: Resultado del registro del usuario.
+    """
+    user_data = {
+        "id_token": id_token,
+        "email": email,
+    }
+    if fcm_token is not None:
+        user_data["fcm_token"] = fcm_token
+    if latitude is not None:
+        user_data["latitude"] = latitude
+    if longitude is not None:
+        user_data["longitude"] = longitude
+    if timestamp is not None:
+        user_data["last_active"] = timestamp
+    result = post_method("users", user_data)
+    return result
+
 def update_user(fcm_token: str, id_token: str, latitude: str, longitude: str, email: str = None, timestamp: str = None):
     """
     Actualiza la información de un usuario.
@@ -235,17 +260,15 @@ def update_user(fcm_token: str, id_token: str, latitude: str, longitude: str, em
     :return: Resultado de la actualización del usuario.
     """
     update_data = {}
-    if fcm_token is not None:
-        update_data["fcm_token"] = fcm_token
     if latitude is not None:
         update_data["latitude"] = latitude
     if longitude is not None:
         update_data["longitude"] = longitude
-    if email is not None:
-        update_data["email"] = email
     if timestamp is not None:
         update_data["last_active"] = timestamp
-    result = post_method("users", {"id_token": id_token, **update_data})
+
+
+    result = update_method("users", {"id_token": id_token}, {"$set": update_data})
     return result
 
 

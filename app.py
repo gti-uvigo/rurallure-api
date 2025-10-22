@@ -733,13 +733,14 @@ def register_user():
 
     if not id_token or not email:
         return jsonify({"status": "error", "message": "Missing required fields"}), 400
+    print("Registering user:", id_token, fcm_token, email, latitude, longitude, timestamp)
 
     test_user = dto.get_user_by_id(id_token)
     if test_user:
         dto.update_user(fcm_token, id_token, latitude, longitude, email, timestamp)
         return jsonify({"status": "ok", "data": test_user}), 200
     
-    user = dto.register_user(fcm_token, id_token, latitude, longitude, email, timestamp)
+    user = dto.register_user(fcm_token, id_token, email, latitude, longitude,  timestamp)
 
     return jsonify({"status": "ok", "data": user}), 200
 
@@ -791,6 +792,9 @@ def update_user():
 
     if not id_token:
         return jsonify({"status": "error", "message": "Missing required fields"}), 400
+    
+
+    print("Updating user:", id_token, latitude, longitude, timestamp)
 
     user = dto.update_user(None, id_token, latitude, longitude, None, timestamp)
 
@@ -848,7 +852,7 @@ def send_notification_sos():
     for u in all_users:
         if u["id_token"] != id_token:
             tiempo_actual = time.gmtime()
-            tiempo_usuario = time.strptime(u["last_updated"], '%Y-%m-%dT%H:%M:%SZ')
+            tiempo_usuario = time.strptime(u["last_active"], '%Y-%m-%dT%H:%M:%SZ')
             print(tiempo_actual)
             print(tiempo_usuario)
             diferencia_minutos = (time.mktime(tiempo_actual) - time.mktime(tiempo_usuario)) / 60.0

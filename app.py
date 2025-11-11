@@ -842,8 +842,8 @@ def send_notification_sos():
     
     if not user.get("fcm_token", None):
         return jsonify({"status": "error", "message": "User has no FCM token"}), 404
-    titulo = "SOS Rurallure"
-    cuerpo = "Alguien necesita ayuda. Coordenadas: {}, {}".format(user["latitude"], user["longitude"])
+    titulo = "SOS Alert"
+    cuerpo = "{}, {}".format(user["latitude"], user["longitude"])
     
 
     ##Obtengo todo los usuarios de la base de datos, y veo aquellos que se actualizaran hace menos de 30 minutos y estan a menos de 1km
@@ -972,100 +972,116 @@ def create_poi():
     longitude = body.get('longitude', None)
     user_email = body.get('user_email', None)
     types = body.get('types', [])
+    languages = dto.get_languages()
 
-    url = "http://193.146.210.235:5050/"
-
-    if title or description:
-        if title:
-          response = requests.post(url + "moderate_text", json={"text": title})
-          inappropriate_content = response.status_code == 403 and response.json().get("error") == "Text not allowed"
-          if inappropriate_content:
-              return jsonify({"status": "error", "message": "Inappropriate content in title or description"}), 400
-        if description:
-          response = requests.post(url + "moderate_text", json={"text": description})
-          inappropriate_content = response.status_code == 403 and response.json().get("error") == "Text not allowed"
-          if inappropriate_content:
-              return jsonify({"status": "error", "message": "Inappropriate content in title or description"}), 400
-
-    # cargamos el modelo
-    requests.get(url + "load_model")
-    print("Modelo cargado")
-    
     if not title and not description:
         return jsonify({"status": "error", "message": "Title or description required"}), 400
     if latitude is None or longitude is None:
         return jsonify({"status": "error", "message": "Latitude and longitude required"}), 400
+
+    url = "http://193.146.210.235:5050/generate_poi"
+
+    payload = {
+        "image": image,
+        "title": title,
+        "description": description,
+        "latitude": latitude,
+        "longitude": longitude,
+        "types": types,
+        "user_email": user_email,
+        "languages": languages
+    }
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    response = requests.post(url, json=payload, headers=headers)
+    if response.status_code != 200:
+        return jsonify({"status": "error", "message": "Error creating POI"}), 500
     
-    # Generar título si no existe
-    if not title:
-        prompt = f"Genera un título para un punto de interés con la descripción: {description}. El título debe ser breve y atractivo."
-        response = requests.post(url + "generate_text", json={"prompt": prompt}, headers={"Content-Type": "application/json"})
-        title = response.json().get("text")
-        print("Título generado:", title)
+    return jsonify({"status": "ok", "message": "POI queued"}), 200
 
-    # Generar descripción si no existe
-    if not description:
-        prompt = f"Genera una descripción corta para un punto de interés con el título: {title}. La descripción debe ser breve y atractiva."
-        response = requests.post(url + "generate_text", json={"prompt": prompt})
-        description = response.json().get("text")
-        print("Descripción generada:", description)
+    
 
-    # Generar tipos si no existen
-    if not types or len(types) == 0:
-        prompt = f"Dime un tipo posible para un punto de interés con el título: {title} y la descripción: {description}. El tipo debe ser uno de los siguientes: restaurante, museo, parque, monumento, iglesia, playa, montaña, río, lago, bosque, ciudad, pueblo.Responde solo con el tipo, sin más texto."
-        response = requests.post(url + "generate_text", json={"prompt": prompt})
-        type_text = response.json().get("text")
-        types = [t.strip() for t in type_text.split(",")]  # convertir en lista
-        print("Tipos generados:", types)
+    # dto.create_poi(image, titles, descriptions_list, latitude, longitude, types, user_email=user_email)
+
+    # return jsonify({"title": title, "description": description}), 200
 
 
-    # Traducir títulos y descripciones
-    languages = dto.get_languages()
-    titles = []
-    descriptions_list = []
 
-    for lang in languages:
-        lang_id = lang['id']
-        lang_name = lang['name']
-
-        # Título
-        prompt = f"Traduce el siguiente texto al {lang_name}: {title}"
-        response = requests.post(url + "generate_text", json={"prompt": prompt})
-        translated_title = response.json().get("text")
-        titles.append({"language_id": lang_id, "text": translated_title})
-        print(f"Título traducido al {lang_name}:", translated_title)
-
-        # Descripción
-        prompt = f"Traduce el siguiente texto al {lang_name}: {description}"
-        response = requests.post(url + "generate_text", json={"prompt": prompt})
-        translated_description = response.json().get("text")
-        descriptions_list.append({"language_id": lang_id, "text": translated_description})
-        print(f"Descripción traducida al {lang_name}:", translated_description)
-
-    # descargamos el modelo
-    requests.get(url + "unload_model")
-    print("Modelo descargado")
-
-    # Generar imagen si no existe
-    if not image:
-        prompt = f"Genera una imagen para un punto de interés con el título: {title} y la descripción: {description}. La imagen debe ser atractiva y relevante."
-        response = requests.post(url + "generate_image", json={"prompt": prompt})
-        image_base64 = response.json().get("image_base64")
-        image = utils.base64StringToJpg(image_base64)
-        print("Imagen generada")
+@app.route('/upload_poi_to_mongo', methods=['POST'])
+def upload_poi_to_mongo():
+    body = request.get_json() 
+    status = body.get('status', 'ok')
+    user_email = body.get('user_email', None)
+    if status == 'error':
+        message = body.get('message', 'Unknown error')
+        titulo = "POI Inappropriate Content"
+        cuerpo = f"{message}."
 
     else:
-        image = utils.base64StringToJpg(image)
-        print("Imagen recibida")
+      image_base64 = body.get('image', None)
+      titles = body.get('titles', None)
+      descriptions_list = body.get('descriptions', None)
+      latitude = body.get('latitude', None)
+      longitude = body.get('longitude', None)
+      types = body.get('types', [])
+      
 
-    dto.create_poi(image, titles, descriptions_list, latitude, longitude, types, user_email=user_email)
-
-    return jsonify({"title": title, "description": description}), 200
+      image = utils.base64StringToJpg(image_base64)
 
 
+      dto.create_poi(image, titles, descriptions_list, latitude, longitude, types, user_email=user_email)
+
+      #mandamos notificacion de que se ha subido el POI
+      titulo = "POI Created Successfully"
+      cuerpo = "Tu punto de interés ha sido creado correctamente. ¡Gracias por contribuir!"
+
+
+    fcm_token = dto.get_user_fcm_token_by_email(user_email)
+    if fcm_token: 
+      mensaje = messaging.Message(
+          notification=messaging.Notification(
+              title=titulo,
+              body=cuerpo,
+          ),
+          token=fcm_token,
+      )
+      respuesta = messaging.send(mensaje)
+      print("Mensaje enviado:", respuesta)
+
+      return jsonify({"status": "ok", "message": "Job Done"}), 200
 
 
 
+@app.route('/two_points_route', methods=['POST'])
+def two_points_route():
+    body = request.get_json()
+    latitude1 = body.get('latitude1', None)
+    longitude1 = body.get('longitude1', None)
+    latitude2 = body.get('latitude2', None)
+    longitude2 = body.get('longitude2', None)
+    
+    route = utils.get_route([latitude1, longitude1], [latitude2, longitude2], profile="foot")
+
+
+    return jsonify({"status": "ok", "route": route}), 200
+
+
+
+
+@app.route('/get_pois_around_a_route', methods=['POST'])
+def get_pois_around_a_route():
+    body = request.get_json()
+    route_id = body.get('route_id', None)
+    distance_km = float(body.get('distance_km', 1.0))
+    language_id = body.get('language_id', '6d68e409-c46e-4d4a-8560-f15256e9cbb3')
+
+    if not route_id:
+        return jsonify({"status": "error", "message": "Missing route_id parameter"}), 400
+
+    pois = dto.get_pois_around_a_route(route_id, distance_km, language_id)
+
+    return jsonify({"status": "ok", "data": pois}), 200
 
 
 if __name__ == '__main__':

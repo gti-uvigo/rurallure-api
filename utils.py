@@ -2,6 +2,33 @@ import requests
 import json
 import base64
 
+def haversine_distance(start_points, end_points):
+    """
+    Calcula la distancia Haversine entre dos puntos geográficos.
+    
+    :param start_points: Coordenadas del punto de inicio (latitud, longitud).
+    :param end_points: Coordenadas del punto final (latitud, longitud).
+    :return: Distancia en kilómetros entre los dos puntos.
+    """
+    from math import radians, sin, cos, sqrt, atan2
+
+    R = 6371.0  # Radio de la Tierra en kilómetros
+
+    lat1 = radians(float(start_points[0]))
+    lon1 = radians(float(start_points[1]))
+    lat2 = radians(float(end_points[0]))
+    lon2 = radians(float(end_points[1]))
+
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+
+    a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+    distance = R * c
+
+    return distance
+
 
 def get_route(start_points,end_points,profile = "foot"):
     """
@@ -17,6 +44,11 @@ def get_route(start_points,end_points,profile = "foot"):
     lon_origin = float(start_points[1])
     lat_destination = float(end_points[0])
     lon_destination = float(end_points[1])
+
+
+    # comprobamos si la distancia es mayor a 2km , si es devolvemos vacio
+    if haversine_distance(start_points, end_points) > 2:
+        return []
 
     url = 'http://193.146.210.248:8989/route'
 

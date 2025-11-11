@@ -159,7 +159,7 @@ def get_all_routes_by_route_type(route_type: str, language_id: str = "6d68e409-c
     for route in routes:
         route["title"] = get_text_by_lang(route.get("titles", []), language_id)
         route["route"] = route['locations']['all_points']
-        for key in ["_id", "titles", "short_descriptions", "long_descriptions", "stages", "locations", "updated_at", "owner_id", "image_id", "visibility", "distance", "type", "ratings"]:
+        for key in ["_id", "titles", "short_descriptions", "long_descriptions", "locations", "updated_at", "owner_id", "image_id", "visibility", "distance", "type", "ratings"]:
             if key in route:
                 del route[key]
     return routes
@@ -304,3 +304,96 @@ def get_pois_by_user_email(user_email: str, language_id: str = "6d68e409-c46e-4d
             if key in poi:
                 del poi[key]
     return pois
+
+
+
+def get_user_fcm_token_by_email(email: str):
+    """
+    Obtiene el fcm_token de un usuario por su email.
+
+    :param email: Email del usuario a buscar.
+    :return: fcm_token del usuario encontrado o None si no se encuentra.
+    """
+    user = get_method("users", {"email": email})
+    if user:
+        return user.get("fcm_token")
+    return None
+
+
+def calcular_distancia_km(lat1, lon1, lat2, lon2):
+    """
+    Calcula la distancia en kilómetros entre dos puntos usando la fórmula de Haversine.
+    """
+    from math import radians, sin, cos, sqrt, atan2
+
+    R = 6371.0  # Radio de la Tierra en kilómetros
+    
+    lat1_rad = radians(lat1)
+    lon1_rad = radians(lon1)
+    lat2_rad = radians(lat2)
+    lon2_rad = radians(lon2)
+    
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+    
+    a = sin(dlat / 2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon / 2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    
+    distancia = R * c
+    return distancia
+
+def get_pois_around_a_route(route_id, distance_km, language_id: str = "6d68e409-c46e-4d4a-8560-f15256e9cbb3"):
+    """
+    Obtiene todos los puntos de interés (POIs) alrededor de una ruta específica dentro de una distancia dada.
+    Excluye los POIs que ya están dentro de la ruta original (en stages o en pois).
+
+    :param route_id: ID de la ruta.
+    :param distance_km: Distancia en kilómetros para buscar POIs alrededor de la ruta.
+    :return: Lista de POIs alrededor de la ruta (excluyendo los que están dentro de la ruta).
+    """
+    route = get_method("routes", {"route_id": route_id}, many=False)
+    if not route or "locations" not in route or "all_points" not in route["locations"]:
+        return []
+
+    route_points = route["locations"]["all_points"]
+    
+    # Obtener los POIs que están dentro de la ruta (para excluirlos después)
+    pois_in_route = set()
+    
+    # Agregar POIs del campo "pois" (si existe)
+    if "pois" in route:
+        pois_in_route.update(route["pois"])
+    
+    # Agregar POIs de los stages
+    if "stages" in route:
+        for stage in route["stages"]:
+            if "points_of_interest" in stage:
+                for poi in stage["points_of_interest"]:
+                    if "id" in poi:
+                        pois_in_route.add(poi["id"])
+    
+    pois = get_method("pois", {}, many=True)
+    pois_around_route = []
+
+    for poi in pois:
+        try:
+            # Excluir POIs que ya están en la ruta
+            if "id" in poi and poi["id"] in pois_in_route:
+                continue
+
+            del poi["_id"]
+            poi["title"] = get_text_by_lang(poi.get("titles", []), language_id)
+            poi["description"] = get_text_by_lang(poi.get("descriptions", []), language_id)
+            poi_lat = float(poi['latitude'])
+            poi_lon = float(poi['longitude'])
+            for point in route_points[::30]:
+                route_lat = point[1]
+                route_lon = point[0]
+                distance = calcular_distancia_km(poi_lat, poi_lon, route_lat, route_lon)
+                if distance <= distance_km:
+                    pois_around_route.append(poi)
+                    break
+        except (KeyError, ValueError):
+            continue
+
+    return pois_around_route

@@ -1,4 +1,4 @@
-from db.dao import get_method, post_method, get_image_gridfs, update_method, upload_image_gridfs
+from db.dao import delete_method, get_method, post_method, get_image_gridfs, update_method, upload_image_gridfs
 import uuid
 
 
@@ -183,7 +183,7 @@ def get_all_routes_by_route_type(route_type: str, language_id: str = "6d68e409-c
 
 
 
-def create_poi(image, titles, descriptions, latitude, longitude, types, user_email, address = None, website = None, booking = None, minutes_duration = None, rating = None, planner_priority = None):
+def create_poi(image, titles, descriptions, latitude, longitude, types, user_email, address = None, website = None, booking = None, minutes_duration = None, rating = None, planner_priority = None, zenodo_url = None):
     """
     Crea un nuevo punto de interés (POI) en la base de datos.
     
@@ -199,6 +199,8 @@ def create_poi(image, titles, descriptions, latitude, longitude, types, user_ema
     :param minutes_duration: Duración en minutos para visitar el POI (opcional).
     :param rating: Calificación del POI (opcional).
     :param planner_priority: Prioridad en el planificador para el POI (opcional).
+    :param zenodo_url: URL de Zenodo para el POI (opcional).
+    
     :return: Resultado de la creación del POI.
     """
     # generamos un uuid para la imagen
@@ -209,6 +211,7 @@ def create_poi(image, titles, descriptions, latitude, longitude, types, user_ema
     
 
     poi_data = {
+        "id": str(uuid.uuid4()),
         "titles": titles,
         "descriptions": descriptions,
         "latitude": latitude,
@@ -222,9 +225,22 @@ def create_poi(image, titles, descriptions, latitude, longitude, types, user_ema
         "planner_priority": planner_priority,
         "image_id": image_id,
         "owner": user_email,
+        "zenodo_url": zenodo_url,
     }
     result = post_method("pois", poi_data)
     return result
+
+
+def delete_poi(poi_id: str):
+    """
+    Elimina un punto de interés (POI) por su ID.
+    
+    :param poi_id: ID del punto de interés a eliminar.
+    :return: Resultado de la eliminación del POI.
+    """
+    result = delete_method("pois", {"id": poi_id})
+    return result
+
 
 
 def get_user_by_id(id_token: str):

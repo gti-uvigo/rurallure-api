@@ -1035,7 +1035,8 @@ def create_poi():
         "longitude": longitude,
         "types": types,
         "user_email": user_email,
-        "languages": languages
+        "languages": languages,
+        "dev_mode": os.getenv("DB_NAME") == "rurallure-dev"
     }
     headers = {
         'Content-Type': 'application/json'
@@ -1071,31 +1072,56 @@ def upload_poi_to_mongo():
       latitude = body.get('latitude', None)
       longitude = body.get('longitude', None)
       types = body.get('types', [])
+      address = body.get('address', None)
+      website = body.get('website', None)
+      booking = body.get('booking', None)
+      minutes_duration = body.get('minutes_duration', None)
+      zenodo_url = body.get('zenodo_url', None)
+
       
 
       image = utils.base64StringToJpg(image_base64)
 
 
-      dto.create_poi(image, titles, descriptions_list, latitude, longitude, types, user_email=user_email)
+      dto.create_poi(image, titles, descriptions_list, latitude, longitude, types, user_email=user_email, address=address, website=website, booking=booking, minutes_duration=minutes_duration, zenodo_url=zenodo_url)
 
       #mandamos notificacion de que se ha subido el POI
       titulo = "POI Created Successfully"
       cuerpo = "Tu punto de interés ha sido creado correctamente. ¡Gracias por contribuir!"
 
+    if user_email == "admin":
+        return jsonify({"status": "ok", "message": "Job Done"}), 200
 
     fcm_token = dto.get_user_fcm_token_by_email(user_email)
     if fcm_token: 
-      mensaje = messaging.Message(
-          notification=messaging.Notification(
-              title=titulo,
-              body=cuerpo,
-          ),
-          token=fcm_token,
-      )
-      respuesta = messaging.send(mensaje)
-      print("Mensaje enviado:", respuesta)
+      try: 
+        mensaje = messaging.Message(
+            notification=messaging.Notification(
+                title=titulo,
+                body=cuerpo,
+            ),
+            token=fcm_token,
+        )
+        respuesta = messaging.send(mensaje)
+        print("Mensaje enviado:", respuesta)
+      except Exception as e:
+        return jsonify({"status": "ok", "message": "POi created, no notification sent"}), 200
 
       return jsonify({"status": "ok", "message": "Job Done"}), 200
+
+
+@app.route('/delete_poi', methods=['POST'])
+def delete_poi():
+    body = request.get_json() 
+    poi_id = body.get('poi_id', None)
+    if not poi_id:
+        return jsonify({"status": "error", "message": "Missing poi_id parameter"}), 400
+
+    dto.delete_poi(poi_id)
+
+    return jsonify({"status": "ok", "message": "POI deleted"}), 200
+
+
 
 
 

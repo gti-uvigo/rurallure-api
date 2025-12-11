@@ -46,6 +46,19 @@ def update_method(collection_name: str, filter: dict, update: dict):
     result = collection.update_one(filter, update)
     return result.modified_count
 
+
+def delete_method(collection_name: str, filter: dict):
+    """
+    Elimina un documento de la colección especificada que coincida con el filtro dado.
+
+    :param collection_name: Nombre de la colección en la base de datos.
+    :param filter: Filtro para buscar el documento a eliminar.
+    :return: Resultado de la operación de eliminación.
+    """
+    collection = db_connection.get_collection(collection_name)
+    result = collection.delete_one(filter)
+    return result.deleted_count
+
  
 def get_image_gridfs(image_id):
     """

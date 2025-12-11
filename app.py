@@ -615,6 +615,54 @@ def function_get_all_pois():
 
     return inner()
 
+@app.route('/get_pois_with_zenodo_url', methods=['POST'])
+def get_pois_with_zenodo_url():
+    """
+    Endpoint to get all POIs that have a Zenodo URL.
+    ---
+    tags:
+      - POI
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            language_id:
+              type: string
+              example: "6d68e409-c46e-4d4a-8560-f15256e9cbb3"
+    responses:
+      200:
+        description: POIs retrieved successfully
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  zenodo_url:
+                    type: string
+      404:
+        description: No POIs found with Zenodo URL
+    """
+    body = request.get_json() 
+    language_id = body.get('language_id', '6d68e409-c46e-4d4a-8560-f15256e9cbb3')
+    pois = dto.get_pois_with_zenodo_url(language_id=language_id)
+    if not pois:
+        return jsonify({"status": "error", "message": "No POIs found with Zenodo URL"}), 404
+
+    return jsonify({"status": "ok", "data": pois}), 200
+
+
 @app.route('/get_poi/<poi_id>', methods=['GET'])
 @jwt_required()
 def function_get_poi_by_id_ext(poi_id):
@@ -958,8 +1006,6 @@ def get_pois_by_user_email():
         return jsonify({"status": "error", "message": "No POIs found for this user"}), 404
 
     return jsonify({"status": "ok", "data": pois}), 200
-
-
 
 
 @app.route('/create_poi', methods=['POST'])

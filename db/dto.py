@@ -75,6 +75,22 @@ def get_poi_by_id(poi_id: str, language_id: str = "6d68e409-c46e-4d4a-8560-f1525
                 del poi[key]
     return poi
 
+def get_pois_with_zenodo_url(language_id):
+    """
+    Obtiene todos los puntos de interés (POIs) que tienen una URL de Zenodo.
+    
+    :return: Lista de POIs con URL de Zenodo.
+    """
+    pois = get_method("pois", {"zenodo_url": {"$exists": True, "$ne": ""}}, many=True)
+    
+    for poi in pois:
+        poi["title"] = get_text_by_lang(poi.get("titles", []), language_id)
+        poi["description"] = get_text_by_lang(poi.get("descriptions", []), language_id)
+        for key in ["_id", "titles", "descriptions"]:
+            if key in poi:
+                del poi[key]
+    return pois
+
 
 
 def get_languages():
@@ -266,6 +282,8 @@ def update_user(fcm_token: str, id_token: str, latitude: str, longitude: str, em
         update_data["longitude"] = longitude
     if timestamp is not None:
         update_data["last_active"] = timestamp
+    if fcm_token is not None:
+        update_data["fcm_token"] = fcm_token
 
 
     result = update_method("users", {"id_token": id_token}, {"$set": update_data})

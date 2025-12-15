@@ -615,6 +615,23 @@ def function_get_all_pois():
 
     return inner()
 
+
+
+@app.route('/get_pois_in_a_region', methods=['POST'])
+def get_pois_in_a_region():
+    """
+    """
+    body = request.get_json()
+    north = body.get('north', None)
+    south = body.get('south', None)
+    east = body.get('east', None)
+    west = body.get('west', None)
+    language_id = body.get('language_id', '6d68e409-c46e-4d4a-8560-f15256e9cbb3')
+    pois = dto.get_pois_in_a_region(north, south, east, west, language_id=language_id)
+    return jsonify({"status": "ok", "data": pois}), 200
+
+
+
 @app.route('/get_pois_with_zenodo_url', methods=['POST'])
 def get_pois_with_zenodo_url():
     """
@@ -711,6 +728,23 @@ def function_get_poi_by_id_ext(poi_id):
         return jsonify({"status": "ok", "data": result}), 200
 
     return inner()
+
+
+
+
+@app.route('/update_poi', methods=['POST'])
+def update_poi():
+    """
+    """
+    body = request.get_json() 
+    poi = body.get('poi', None)
+
+    if not poi:
+        return jsonify({"status": "error", "message": "Missing required fields"}), 400
+
+    poi = dto.update_poi(poi)
+
+    return jsonify({"status": "ok", "data": "Poi updated successfully"}), 200
 
 
 
@@ -1088,13 +1122,10 @@ def upload_poi_to_mongo():
       #mandamos notificacion de que se ha subido el POI
       titulo = "POI Created Successfully"
       cuerpo = "Tu punto de interés ha sido creado correctamente. ¡Gracias por contribuir!"
-
-    if user_email == "admin":
-        return jsonify({"status": "ok", "message": "Job Done"}), 200
-
-    fcm_token = dto.get_user_fcm_token_by_email(user_email)
-    if fcm_token: 
-      try: 
+    try: 
+      fcm_token = dto.get_user_fcm_token_by_email(user_email)
+      if fcm_token: 
+      
         mensaje = messaging.Message(
             notification=messaging.Notification(
                 title=titulo,
@@ -1104,10 +1135,10 @@ def upload_poi_to_mongo():
         )
         respuesta = messaging.send(mensaje)
         print("Mensaje enviado:", respuesta)
-      except Exception as e:
-        return jsonify({"status": "ok", "message": "POi created, no notification sent"}), 200
+    except Exception as e:
+      return jsonify({"status": "ok", "message": "POi created, no notification sent"}), 200
 
-      return jsonify({"status": "ok", "message": "Job Done"}), 200
+    return jsonify({"status": "ok", "message": "Job Done"}), 200
 
 
 @app.route('/delete_poi', methods=['POST'])
@@ -1154,6 +1185,117 @@ def get_pois_around_a_route():
     pois = dto.get_pois_around_a_route(route_id, distance_km, language_id)
 
     return jsonify({"status": "ok", "data": pois}), 200
+
+
+
+@app.route('/create_route', methods=['POST'])
+def create_route():
+    body = request.get_json()
+    language_id = body.get('language_id', '6d68e409-c46e-4d4a-8560-f15256e9cbb3') 
+    long_description = body.get('long_description', '')
+    name = body.get('name', "")
+    image = body.get('image', None)
+    short_description = body.get('short_description', "")
+    route_type = body.get('route_type', None)
+    stage_breaks = body.get('stage_breaks', [])
+    poi_ids = body.get('poi_ids', [])
+    owner = body.get('owner', None)
+    subtype = body.get('subtype', None)
+
+    pois_coords = []
+    poi_image_ids = []
+    poi_names = []
+
+    print("Creating route with POIs:", poi_ids)
+
+    for poi_id in poi_ids:
+        poi = dto.get_poi_by_id(poi_id, language_id)
+        pois_coords.append([float(poi['latitude']), float(poi['longitude'])])
+        poi_names.append(poi['title'])
+        if poi.get("image_id", None):
+            poi_image_ids.append(poi["image_id"])
+
+
+    actual_day = 1
+    stages = []
+    all_points = []
+    total_distance = 0
+
+    for i in range(len(pois_coords)):
+        if i == 0:
+            stages.append({
+                "day": actual_day,
+                "name": f"{poi_names[i]} - ",
+                "points_of_interest": [ {"id": poi_ids[i], "distance": 0}],
+            })
+
+        else:
+            points, distance = utils.get_route_with_distance(pois_coords[i-1], pois_coords[i], profile="foot")
+            total_distance += distance
+            for point in points:
+                all_points.append(point)
+
+            if i in stage_breaks:
+                stages[-1]["points_of_interest"].append({"id": poi_ids[i], "distance": distance})
+                stages[-1]["name"] += f"{poi_names[i]}"
+                actual_day += 1
+                stages.append({
+                    "day": actual_day,
+                    "name": f"{poi_names[i]} - ",
+                    "points_of_interest": [ {"id": poi_ids[i], "distance": 0}],
+                })
+            else:
+                stages[-1]["points_of_interest"].append({"id": poi_ids[i], "distance": distance})
+
+
+    print("all_points:", all_points)
+    locations = {
+        "start": all_points[0],
+        "end": all_points[-1],
+        "all_points": all_points
+    }
+    image_id = None
+    image_jpg = None
+
+    if image:
+        image_jpg = utils.base64StringToJpg(image)
+    else:
+        image_id = poi_image_ids[0] if poi_image_ids else None
+
+    route = dto.create_route(language_id, long_description, name, short_description, route_type, stages, locations, owner, subtype, total_distance, image_id = image_id, image_body=image_jpg)
+    return jsonify({"status": "ok", "data": route}), 200
+
+
+
+@app.route('/delete_route/<route_id>', methods=['DELETE'])
+def delete_route(route_id):
+    if not route_id:
+        return jsonify({"status": "error", "message": "Missing route_id parameter"}), 400
+
+    dto.delete_route(route_id)
+
+    return jsonify({"status": "ok", "message": "Route deleted"}), 200
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':

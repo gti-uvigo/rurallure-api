@@ -1,5 +1,6 @@
 from db.dao import delete_method, get_method, post_method, get_image_gridfs, update_method, upload_image_gridfs
 import uuid
+import time
 
 
 def get_text_by_lang(text_list, lang_id):
@@ -67,13 +68,35 @@ def get_poi_by_id(poi_id: str, language_id: str = "6d68e409-c46e-4d4a-8560-f1525
     """
     print("getting POI ID:", poi_id)
     poi = get_method("pois", {"id": poi_id})
+    
     poi["title"] = get_text_by_lang(poi.get("titles", []), language_id)
     poi["description"] = get_text_by_lang(poi.get("descriptions", []), language_id)
     if poi:
-        for key in ["_id", "titles", "descriptions"]:
+        for key in ["_id"]:
             if key in poi:
                 del poi[key]
     return poi
+
+def update_poi(poi:dict):
+    """
+    Actualiza un punto de interés (POI) por su ID.
+    
+    :param poi: Diccionario con los datos del POI a actualizar.
+    :return: Resultado de la actualización del POI.
+    """
+    not_updated_poi = get_method("pois", {"id": poi["id"]})
+
+    for key in ["descriptions", "titles"]:
+        if key in poi and key in not_updated_poi:
+            updated_lang_ids = {item["language_id"] for item in poi[key]}      
+            for lang_item in not_updated_poi[key]:
+                if lang_item["language_id"] not in updated_lang_ids:
+                    poi[key].append(lang_item)
+
+    result = update_method("pois", {"id": poi["id"]}, {"$set": poi})
+    return result
+
+
 
 def get_pois_with_zenodo_url(language_id):
     """
@@ -328,13 +351,20 @@ def get_pois_by_user_email(user_email: str, language_id: str = "6d68e409-c46e-4d
     :param user_email: Email del usuario cuyos POIs se desean obtener.
     :return: Lista de POIs creados por el usuario.
     """
+
+    super_admin_emails = ["3dbigdataspace@gti.uvigo.es"]
+
     if not user_email:
         raise ValueError("El email del usuario no puede ser vacío.")
-    pois = get_method("pois", {"owner": user_email}, many=True)
+    
+    if user_email in super_admin_emails:
+        pois = get_method("pois", {"owner": {"$exists": True}}, many=True)
+    else:
+        pois = get_method("pois", {"owner": user_email}, many=True)
     for poi in pois:
         poi["title"] = get_text_by_lang(poi.get("titles", []), language_id)
         poi["description"] = get_text_by_lang(poi.get("descriptions", []), language_id)
-        for key in ["_id", "titles", "descriptions"]:
+        for key in ["_id"]:
             if key in poi:
                 del poi[key]
     return pois
@@ -349,7 +379,8 @@ def get_user_fcm_token_by_email(email: str):
     :return: fcm_token del usuario encontrado o None si no se encuentra.
     """
     user = get_method("users", {"email": email})
-    if user:
+    print("User found for FCM token:", user)
+    if user != [] and user is not None:
         return user.get("fcm_token")
     return None
 
@@ -431,3 +462,72 @@ def get_pois_around_a_route(route_id, distance_km, language_id: str = "6d68e409-
             continue
 
     return pois_around_route
+
+
+
+def get_pois_in_a_region(north, south, east, west, language_id: str = "6d68e409-c46e-4d4a-8560-f15256e9cbb3"):
+    """
+    Obtiene todos los puntos de interés (POIs) dentro de una región definida por límites geográficos.
+
+    :param north: Latitud norte del límite.
+    :param south: Latitud sur del límite.
+    :param east: Longitud este del límite.
+    :param west: Longitud oeste del límite.
+    :return: Lista de POIs dentro de la región especificada.
+    """
+    query = {
+    "latitude": {"$gte": south, "$lte": north},
+    "longitude": {"$gte": west, "$lte": east}
+    }
+    pois = get_method("pois", query, many=True)
+    for poi in pois:
+        poi["title"] = get_text_by_lang(poi.get("titles", []), language_id)
+        poi["description"] = get_text_by_lang(poi.get("descriptions", []), language_id)
+        for key in ["_id"]:
+            if key in poi:
+                del poi[key]
+    return pois
+
+
+
+def create_route(language_id, long_description, name, short_description, route_type, stages, locations, owner, subtype, total_distance, image_id=None, image_body=None):
+    """
+    Crea una nueva ruta en la base de datos.
+    
+    :param route_data: Diccionario con los datos de la ruta a crear.
+    :return: Resultado de la creación de la ruta.
+    """
+    if image_body is not None:
+        image_id = str(uuid.uuid4())
+        upload_image_gridfs(image_body, image_id=image_id, metadatos={"contentType": "image/jpeg"})
+
+
+    route_data = {
+        "route_id": str(uuid.uuid4()),
+        "route_type": route_type,
+        "titles": [{"language_id": language_id, "text": name}],
+        "short_descriptions": [{"language_id": language_id, "text": short_description}],
+        "long_descriptions": [{"language_id": language_id, "text": long_description}],
+        "updated_at": time.strftime("%Y-%m-%d"),
+        "owner_id": owner,
+        "type": subtype,
+        "image_id": image_id,
+        "visibility": "public",
+        "distance": total_distance,
+        "stages": stages,
+        "locations": locations,
+        "ratings": {"average": 0, "count": 0},
+    }
+    result = post_method("routes", route_data)
+    return result
+
+
+def delete_route(route_id: str):
+    """
+    Elimina una ruta por su ID.
+    
+    :param route_id: ID de la ruta a eliminar.
+    :return: Resultado de la eliminación de la ruta.
+    """
+    result = delete_method("routes", {"route_id": route_id})
+    return result

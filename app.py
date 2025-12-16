@@ -363,6 +363,19 @@ def function_get_route_types():
     return jsonify({"status": "ok", "data": result}), 200
 
 
+@app.route('/create_route_type', methods=['POST'])
+def function_create_route_type():
+    """
+    """
+    body = request.get_json()
+    name = body.get('name', None)
+    
+
+    route_type = dto.create_route_type(name)
+
+    return jsonify({"status": "ok", "data": route_type}), 200
+
+
 
 @app.route('/images/<image_id>', methods=['GET'])
 def function_download_image(image_id):

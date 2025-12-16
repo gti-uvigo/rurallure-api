@@ -1,6 +1,7 @@
 from db.dao import delete_method, get_method, post_method, get_image_gridfs, update_method, upload_image_gridfs
 import uuid
 import time
+from bson import ObjectId
 
 
 def get_text_by_lang(text_list, lang_id):
@@ -42,6 +43,26 @@ def get_route_stages(route_id: str):
     if "stages" not in route_stages:
         return {"stages": []}
     return route_stages["stages"]
+
+
+
+def create_route_type(name: str):
+    """
+    Crea un nuevo tipo de ruta en la base de datos.
+    
+    :param name: Nombre del tipo de ruta a crear.
+    :return: Resultado de la creación del tipo de ruta.
+    """
+    route_type_data = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "subtypes": [{"name": "featured"}]
+    }
+    result_id = post_method("route_types", route_type_data)
+    result = get_method("route_types", {"_id": ObjectId(result_id)})
+    del result["_id"]
+
+    return result
 
 
 def get_route_locations(route_id: str):

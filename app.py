@@ -1275,6 +1275,8 @@ def create_route():
     else:
         image_id = poi_image_ids[0] if poi_image_ids else None
 
+    total_distance = round(total_distance, 2)
+
     route = dto.create_route(language_id, long_description, name, short_description, route_type, stages, locations, owner, subtype, total_distance, image_id = image_id, image_body=image_jpg)
     return jsonify({"status": "ok", "data": route}), 200
 

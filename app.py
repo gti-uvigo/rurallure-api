@@ -1354,7 +1354,19 @@ def delete_route(route_id):
     return jsonify({"status": "ok", "message": "Route deleted"}), 200
 
 
+@app.route('/get_all_audios', methods=['GET'])
+def get_all_audios():
+    audios = dto.get_audios_by_metadata({})
+    return jsonify({"status": "ok", "data": audios}), 200
 
+
+@app.route('/get_audio/<audio_id>', methods=['GET'])
+def get_audio(audio_id):
+    audio = dto.get_audio_by_id(audio_id)
+    if not audio:
+        return jsonify({"status": "error", "message": "Audio not found"}), 404
+    
+    return audio
 
 
 

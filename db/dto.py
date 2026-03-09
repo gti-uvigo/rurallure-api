@@ -749,3 +749,25 @@ def get_event_by_id(event_id: str):
             if key in event:
                 del event[key]
     return event
+
+def get_routes_nearby_a_location(latitude, longitude, distance_km, language_id):
+    routes = get_method("routes", {}, many=True)
+    nearby_routes = []
+    for route in routes:
+        try:
+            del route["_id"]
+            route["title"] = get_text_by_lang(route.get("titles", []), language_id)
+            if "locations" in route and "all_points" in route["locations"]:
+                route_points = route["locations"]["all_points"]
+                for point in route_points[::30]:
+                    route_lat = point[1]
+                    route_lon = point[0]
+                    distance = calcular_distancia_km(route_lat, route_lon, latitude, longitude)
+                    if distance <= distance_km:
+                        nearby_routes.append(route)
+                        break
+        except (KeyError, ValueError):
+            continue
+
+    return nearby_routes
+    

@@ -1526,6 +1526,60 @@ def get_nearby_pois():
     
     return jsonify({"status": "ok", "data": pois}), 200
 
+
+@app.route("/get_routes_nearby_a_location", methods=["POST"])
+def get_routes_nearby_a_location():
+    """
+    Endpoint to get nearby routes based on a location.
+    ---
+    tags:
+      - Routes
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            latitude:
+              type: number
+              example: 42.123456
+            longitude:
+              type: number
+              example: -71.123456
+            distance:
+              type: number
+              example: 1.0
+            language_id:
+              type: string
+              example: "6d68e409-c46e-4d4a-8560-f15256e9cbb3"
+    responses:
+      200:
+        description: Nearby routes retrieved successfully
+        schema:
+          type: object          properties:
+            status:
+              type: string
+            data:
+              type: array
+              items:
+                type: object
+      400:
+        description: Invalid input data
+    """
+    body = request.get_json()
+    latitude = body.get('latitude', None)
+    longitude = body.get('longitude', None)
+    distance_km = float(body.get('distance', 1.0))
+    language_id = body.get('language_id', '6d68e409-c46e-4d4a-8560-f15256e9cbb3')
+
+    if latitude is None or longitude is None:
+        return jsonify({"status": "error", "message": "Missing required fields"}), 400
+
+    routes = dto.get_routes_nearby_a_location(latitude, longitude, distance_km, language_id)
+
+    return jsonify({"status": "ok", "data": routes}), 200
+
 @app.route('/events/create', methods=['POST'])
 def function_create_event():
     """

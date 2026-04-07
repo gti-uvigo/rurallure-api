@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify, abort
-from deploy_models import generate_text, load_model, unload_model, ensure_model, generate_image_SD35, moderate_text
+from deploy_models import generate_text, load_model, unload_model, ensure_model, generate_image_SD35, moderate_image, moderate_text
 from io import BytesIO
 import base64
+import Image
 from redis import Redis
 from rq import Queue
 from tasks import create_poi # Importamos nuestra tarea
@@ -77,6 +78,26 @@ def moderate_text_route():
 
     return jsonify({"ok": True, "scores": result["scores"]})
 
+@app.route("/moderate_image", methods=["POST"])
+def moderate_image_route():
+    data = request.json
+    image_base64 = data.get("image_base64")
+
+    if not image_base64:
+        return jsonify({"error": "No image provided"}),400 
+    
+    try:
+        image_data = base64.b64decode(image_base64)
+        image = Image.open(BytesIO(image_data)).convert("RGB")
+    except Exception as e:
+        return jsonify({"error": "Invalid image format"}), 400
+    result = moderate_image(image)
+
+    if result["reject"]:
+        return jsonify({"error": "Image not allowed", "scores": result["scores"]}), 403
+    return jsonify({"ok": True, "scores": result["scores"]})
+
 if __name__ == '__main__':
     ensure_model()
     app.run(host='0.0.0.0', port=5050)
+

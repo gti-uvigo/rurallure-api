@@ -1,6 +1,6 @@
 import torch
 from diffusers import StableDiffusion3Pipeline
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from torch.nn.functional import softmax
 import os
 from huggingface_hub import snapshot_download
@@ -66,6 +66,34 @@ def generate_image_SD35(prompt: str = None):
     gc.collect()
 
     return image
+
+def moderate_image(image):
+    """Modelo que gestiona el contenido NSFW de las imágenes del usuario"""
+    classifier = pipeline(
+        "image-classification",
+        model = "Falconsai/nsfw-image-detection",
+        device=0 if torch.cuda.is_available() else -1
+    )
+
+    results = classifier(image, top_k=None)
+    nsfw_score = 0.0
+    for res in results:
+        if res['label'] == 'nsfw':
+            nsfw_score = res['score']
+            break
+    
+    del classifier
+    torch.cuda.empty_cache()
+    gc.collect()
+
+    if nsfw_score > 0.50:
+        return {"reject": True, "scores": nsfw_score}
+    else:
+        return {"reject": False, "scores": nsfw_score}
+
+
+    
+
 
 def load_model():
     global tokenizer, model
@@ -214,3 +242,5 @@ def moderate_text(text: str):
         return {"reject": True, "scores": score}
     else:
         return {"reject": False, "scores": score}
+
+

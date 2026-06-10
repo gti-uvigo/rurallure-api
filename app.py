@@ -1878,6 +1878,135 @@ def function_get_route_reviews():
     return jsonify({"data": reviews}), 200
 
 
+@app.route('/show_rate_us_notification', methods=['POST'])
+def show_rate_us_notification():
+    """
+    Endpoint to check if the app rating notification should be shown to the user.
+    ---
+    tags:
+      - Ratings
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - user_id
+          properties:
+            user_id:
+              type: string
+              example: "<token>"
+    responses:
+      200:
+        description: Resultado de la comprobación
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+            data:
+              type: object
+              properties:
+                show_notification:
+                  type: boolean
+                has_rated_app:
+                  type: boolean
+      400:
+        description: Datos de entrada inválidos
+    """
+    body = request.get_json()
+    if not body or not body.get('user_id'):
+        return jsonify({"status": "error", "message": "Missing required field: user_id"}), 400
+
+    result = dto.check_rate_us_notification(body['user_id'])
+    return jsonify({"status": "ok", "data": result}), 200
+
+
+@app.route('/rate_us', methods=['POST'])
+def rate_us():
+    """
+    Endpoint to submit an app rating from a user.
+    ---
+    tags:
+      - Ratings
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - user_id
+          properties:
+            user_id:
+              type: string
+              example: "<token>"
+            perfil:
+              type: string
+              example: "Peregrino/a"
+            dispositivo:
+              type: string
+              example: "iOS"
+            registro_sencillo:
+              type: integer
+              example: 4
+            navegacion_intuitiva:
+              type: integer
+              example: 5
+            diseno_atractivo:
+              type: integer
+              example: 4
+            mapa_claro:
+              type: integer
+              example: 3
+            poi_suficiente:
+              type: integer
+              example: 4
+            guias_audio:
+              type: string
+              example: "Buenas"
+            realidad_aumentada:
+              type: string
+              example: "Sí, funcionó sin problemas"
+            funcionalidad_util:
+              type: string
+              example: "Ambas por igual"
+            usaria_app:
+              type: string
+              example: "Definitivamente sí"
+            funcionalidades_destacadas:
+              type: array
+              items:
+                type: string
+              example: ["Mapas y navegación", "Guías de audio"]
+            mejoras:
+              type: string
+              example: "Texto libre..."
+            puntuacion_global:
+              type: integer
+              example: 8
+    responses:
+      200:
+        description: Valoración guardada correctamente
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+            data:
+              type: object
+      400:
+        description: Datos de entrada inválidos
+    """
+    body = request.get_json()
+    if not body or not body.get('user_id'):
+        return jsonify({"status": "error", "message": "Missing required field: user_id"}), 400
+
+    inserted_id = dto.save_rate_us(body)
+    return jsonify({"status": "ok", "data": {"id": inserted_id}}), 200
+
+
 if __name__ == '__main__':
   # # generate swagger documentation
   # with app.app_context():

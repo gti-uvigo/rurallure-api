@@ -940,6 +940,56 @@ def create_route_review(user_id: str, route_id: str, comment: str):
     }
 
 
+def save_rate_us(data: dict):
+    """
+    Guarda la valoración de la app enviada por un usuario y marca has_rated_app en el usuario.
+
+    :param data: Diccionario con todos los campos del formulario de valoración.
+    :return: ID del documento insertado.
+    """
+    data["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    inserted_id = post_method("app_ratings", data)
+    user_id = data.get("user_id")
+    if user_id and user_id != "unknown_user":
+        update_method("users", {"id_token": user_id}, {"$set": {"has_rated_app": True}})
+    return inserted_id
+
+
+def check_rate_us_notification(user_id: str):
+    """
+    Comprueba si se debe mostrar la notificación de valoración de la app al usuario.
+
+    Reglas:
+    - Si has_rated_app es True → no mostrar.
+    - Si la última comprobación (last_rate_us_check) fue hace menos de 5 días → no mostrar.
+    - En cualquier otro caso → mostrar y actualizar last_rate_us_check.
+
+    :param user_id: ID del usuario.
+    :return: Diccionario con show_notification (bool) y has_rated_app (bool).
+    """
+    import datetime
+    user = get_method("users", {"id_token": user_id})
+    if not user:
+        return {"show_notification": False, "has_rated_app": False, "error": "User not found"}
+
+    if user.get("has_rated_app"):
+        return {"show_notification": False, "has_rated_app": True}
+
+    now = datetime.datetime.utcnow()
+    last_check_str = user.get("last_rate_us_check")
+    if last_check_str:
+        try:
+            last_check = datetime.datetime.strptime(last_check_str, "%Y-%m-%dT%H:%M:%SZ")
+            if (now - last_check).days < 5:
+                return {"show_notification": False, "has_rated_app": False}
+        except ValueError:
+            pass
+
+    now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    update_method("users", {"id_token": user_id}, {"$set": {"last_rate_us_check": now_str}})
+    return {"show_notification": True, "has_rated_app": False}
+
+
 def get_route_reviews(route_id: str):
     """
     Obtiene todas las reseñas de una ruta ordenadas por fecha descendente.
